@@ -1,0 +1,70 @@
+#!/bin/bash
+hostname=$1
+servicedesc=$2
+servicestate=$3
+notificationtype=$4
+hostaddress=$5
+shortdatetime=$6
+serviceoutput=$7
+totalhostsup=$8
+totalhostsdown=$9
+totalservicesok="${10}"
+totalserviceproblems="${11}"
+
+# Nagios domain, used for generating our URLs
+thruk_scheme="http"
+thruk_domain="198.148.101.212"
+
+# Webhook URL, change this to your channels URL
+webhook_url="https://discord.com/api/webhooks/924879943488405555/ad8Dw91zdeJPAK_cSLYimcCmeKJGFJww4mmI27iRUd1Ly3Zm3I7DH3rhQ6wVefhG2EaJ"
+
+# Some colours, change them if you like
+clr_red=13632027
+clr_yel=16098851
+clr_grn=8311585
+
+# pick colour
+clr=$clr_yel
+
+if [[ "$notificationtype" == "PROBLEM" ]]; then
+  clr=$clr_red
+fi
+if [[ "$notificationtype" == "RECOVERY" ]]; then
+  clr=$clr_grn
+fi
+
+# Our internal nagios URL
+nagios_url="${thruk_scheme}://${thruk_domain}/thruk/#cgi-bin/extinfo.cgi?type=2&host=${hostname}&service=${servicedesc}"
+
+# Replace spaces with + because discord doesn't like this
+nagios_url=$(echo "${nagios_url}" | sed s/\ /\+/g)
+
+# totals
+hosts_total=$(( totalhostsup + totalhostsdown ))
+services_total=$(( totalservicesok + totalserviceproblems ))
+
+json_data="{
+  \"username\": \"Nagios\",
+  \"embeds\": [
+    {
+      \"title\": \"Nagios alert: **${hostname} - ${servicedesc}**: ${servicestate} (${notificationtype})\",
+      \"description\": \"<@!155468258290565120> \`${hostaddress}\`\n\",
+      \"url\": \"${nagios_url}\",
+      \"color\": ${clr},
+      \"timestamp\": \"${shortdatetime}\",
+      \"fields\": [
+        {
+          \"name\": \"Service Output\",
+          \"value\": \"${serviceoutput}\"
+        }
+      ],
+      \"footer\": {
+        \"text\": \"${totalhostsup}/${hosts_total} hosts up, ${totalservicesok}/${services_total} services ok\"
+      }
+    }
+  ]
+}"
+
+echo "$json_data" > /tmp/send-discord-service-data.log
+curl -v -X POST -H 'Content-Type: application/json' "${webhook_url}" -d "$json_data" &> /tmp/send-discord-service.log
+exit $?

@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Align input variables
+notificationtype=$1
+hostname=$2
+hoststate=$3
+hostaddress=$4
+shortdatetime=$5
+hostoutput=$6
+totalhostsup=$7
+totalhostsdown=$8
+totalservicesok=$9
+totalserviceproblems="${10}"
+
+# Nagios domain, used for generating our URLs
+thruk_scheme="http"
+thruk_domain="198.148.101.212"
+
+# Webhook URL, change this to your channels URL
+webhook_url="https://discord.com/api/webhooks/924876589643214848/cqKB8ZZQL80gPwnc91AUCUvJnrLtr4eMmsvNq_0bkQqeWOEYYERBX8Dz8lbueVRb9Xet"
+
+# Some colours, change them if you like
+clr_red=13632027
+clr_yel=16098851
+clr_grn=8311585
+
+# pick colour
+clr=$clr_yel
+
+if [[ "$notificationtype" = "PROBLEM" ]]; then
+  clr=$clr_red
+fi
+if [[ "$notificationtype" = "RECOVERY" ]]; then
+  clr=$clr_grn
+fi
+
+# Our internal nagios URL
+nagios_url="${thruk_scheme}://${thruk_domain}/thruk/#cgi-bin/status.cgi?host=${hostname}"
+
+# totals
+hosts_total=$(( totalhostsup + totalhostsdown ))
+services_total=$(( totalservicesok + totalserviceproblems ))
+
+json_data="{
+  \"username\": \"Naemon\",
+  \"embeds\": [
+    {
+      \"title\": \"@DaFr33k Naemon alert: **${hostname}** ${hoststate} (${notificationtype})\",
+      \"description\": \"\`${hostaddress}\`\",
+      \"url\": \"${nagios_url}\",
+      \"timestamp\": \"${shortdatetime}\",
+      \"color\": ${clr},
+      \"fields\": [
+        {
+          \"name\": \"Host Output\",
+          \"value\": \"${hostoutput}\"
+        }
+      ],
+      \"footer\": {
+        \"text\": \"${totalhostsup}/${hosts_total} hosts up, ${totalservicesok}/${services_total} services ok\"
+      }
+    }
+  ]
+}"
+
+echo "$json_data" > /tmp/send-discord-host-data.log
+curl -v -X POST -H 'Content-Type: application/json' "${webhook_url}" -d "$json_data" &> /tmp/send-discord-host.log
+exit $?
